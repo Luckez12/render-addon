@@ -2,10 +2,11 @@ const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
 
 const moviebox = require("./providers/moviebox");
 const onetouchtv = require("./providers/onetouchtv");
+const fourkhdhub = require("./providers/4khdhub");
 
 const manifest = {
   id: "com.luckez12.renderaddon",
-  version: "1.2.1",
+  version: "1.3.0",
   name: "Luckez Stremio Addon",
   description: "Custom multi-provider Stremio stream addon hosted on Render",
   resources: ["stream"],
@@ -28,6 +29,12 @@ const PROVIDERS = [
     name: "OneTouchTV",
     strictKnownQuality: false,
     getStreams: onetouchtv.getStreams
+  },
+  {
+    id: "4khdhub",
+    name: "4KHDHub",
+    strictKnownQuality: false,
+    getStreams: fourkhdhub.getStreams
   }
 ];
 

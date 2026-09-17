@@ -6,8 +6,9 @@ Multi-provider Stremio stream addon hosted on Render.
 
 - MovieBox
 - OneTouchTV
+- 4KHDHub
 
-Both providers are queried together and their usable streams are combined.
+All providers are queried together and their usable streams are combined.
 
 ## Quality policy
 
@@ -21,6 +22,9 @@ Minimum known quality: 720p.
 - 360p: blocked
 - OneTouchTV `Auto` / unknown quality: allowed
 - OneTouchTV explicit 360p / 480p: blocked
+- 4KHDHub 4K / 1080p / 720p: allowed
+- 4KHDHub Auto / unknown quality: allowed
+- 4KHDHub explicit 360p / 480p: blocked
 
 MovieBox retains its existing min-720 filtering behavior.
 
@@ -31,7 +35,8 @@ MovieBox retains its existing min-720 filtering behavior.
 ├── addon.js
 ├── providers/
 │   ├── moviebox.js
-│   └── onetouchtv.js
+│   ├── onetouchtv.js
+│   └── 4khdhub.js
 ├── package.json
 ├── README.md
 └── .gitignore

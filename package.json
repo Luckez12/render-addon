@@ -1,18 +1,19 @@
 {
   "name": "render-addon",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "private": true,
   "description": "Multi-provider Stremio addon hosted on Render",
   "main": "addon.js",
   "scripts": {
     "start": "node addon.js",
-    "check": "node --check addon.js && node --check providers/moviebox.js && node --check providers/onetouchtv.js"
+    "check": "node --check addon.js && node --check providers/moviebox.js && node --check providers/onetouchtv.js && node --check providers/4khdhub.js"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
     "crypto-js": "^4.2.0",
-    "stremio-addon-sdk": "^1.6.10"
+    "stremio-addon-sdk": "^1.6.10",
+    "cheerio-without-node-native": "^0.20.2"
   }
 }
