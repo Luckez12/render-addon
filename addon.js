@@ -1,11 +1,13 @@
 const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
-const { getStreamsByImdb } = require("./providers/moviebox");
+
+const moviebox = require("./providers/moviebox");
+const kisskh = require("./providers/kisskh");
 
 const manifest = {
   id: "com.luckez12.renderaddon",
-  version: "1.2.0",
+  version: "1.3.0",
   name: "Luckez Stremio Addon",
-  description: "Custom Stremio stream addon hosted on Render",
+  description: "Custom multi-provider Stremio stream addon hosted on Render",
   resources: ["stream"],
   types: ["movie", "series"],
   catalogs: [],
@@ -13,6 +15,19 @@ const manifest = {
 };
 
 const builder = new addonBuilder(manifest);
+
+const PROVIDERS = [
+  {
+    id: "moviebox",
+    name: "MovieBox",
+    getStreams: moviebox.getStreams
+  },
+  {
+    id: "kisskh",
+    name: "KissKH",
+    getStreams: kisskh.getStreams
+  }
+];
 
 function parseStremioId(type, id) {
   const parts = String(id || "").split(":");
@@ -47,12 +62,32 @@ function parseStremioId(type, id) {
   return null;
 }
 
-function normalizeStream(stream, requestInfo) {
+function qualityNumber(value) {
+  const text = String(value || "").toLowerCase();
+
+  if (text.includes("4k")) return 2160;
+  if (text.includes("2k")) return 1440;
+
+  const match = text.match(/(\d{3,4})\s*p?/);
+  return match ? Number(match[1]) : 0;
+}
+
+function isAllowedQuality(stream) {
+  const quality = qualityNumber(stream && stream.quality);
+
+  // Enforce the user's >=720p rule when the provider exposes a known quality.
+  // "Auto" / unknown quality is kept for now because adaptive HLS sources often
+  // do not expose a fixed resolution in the URL.
+  return !quality || quality >= 720;
+}
+
+function normalizeStream(stream, requestInfo, provider) {
   if (!stream || !stream.url) return null;
+  if (!isAllowedQuality(stream)) return null;
 
   const out = {
-    name: stream.name || "MovieBox",
-    title: stream.title || stream.quality || "MovieBox",
+    name: stream.name || provider.name,
+    title: stream.title || stream.quality || provider.name,
     url: String(stream.url)
   };
 
@@ -86,7 +121,7 @@ function normalizeStream(stream, requestInfo) {
 
   if (requestInfo && requestInfo.mediaType === "tv") {
     behaviorHints.bingeGroup =
-      "luckez-moviebox-" + (quality || "auto");
+      "luckez-" + provider.id + "-" + (quality || "auto");
   }
 
   if (Object.keys(behaviorHints).length) {
@@ -94,6 +129,51 @@ function normalizeStream(stream, requestInfo) {
   }
 
   return out;
+}
+
+function dedupeStreams(streams) {
+  const seen = new Set();
+
+  return (streams || []).filter((stream) => {
+    if (!stream || !stream.url) return false;
+
+    // Signed query strings may differ while pointing to the same media URL.
+    // For now keep the full URL to avoid accidentally merging distinct streams.
+    const key = String(stream.url);
+    if (seen.has(key)) return false;
+
+    seen.add(key);
+    return true;
+  });
+}
+
+async function resolveProvider(provider, tmdbId, info) {
+  const startedAt = Date.now();
+
+  try {
+    const raw = await provider.getStreams(
+      tmdbId,
+      info.mediaType,
+      info.season,
+      info.episode
+    );
+
+    const streams = (raw || [])
+      .map((stream) => normalizeStream(stream, info, provider))
+      .filter(Boolean);
+
+    console.log(
+      `[${provider.name}] addon streams=${streams.length} elapsed=${Date.now() - startedAt}ms`
+    );
+
+    return streams;
+  } catch (error) {
+    console.error(
+      `[${provider.name}] provider error:`,
+      error && error.message ? error.message : error
+    );
+    return [];
+  }
 }
 
 builder.defineStreamHandler(async ({ type, id }) => {
@@ -110,18 +190,30 @@ builder.defineStreamHandler(async ({ type, id }) => {
   );
 
   try {
-    const rawStreams = await getStreamsByImdb(
+    const tmdbId = await moviebox.getTmdbIdFromImdb(
       info.imdbId,
-      info.mediaType,
-      info.season,
-      info.episode
+      info.mediaType
     );
 
-    const streams = (rawStreams || [])
-      .map((stream) => normalizeStream(stream, info))
-      .filter(Boolean);
+    if (!tmdbId) {
+      console.log(`[STREAM] IMDb -> TMDB mapping not found for ${info.imdbId}`);
+      return { streams: [] };
+    }
 
-    console.log(`[STREAM] returned=${streams.length}`);
+    console.log(`[STREAM] IMDb=${info.imdbId} -> TMDB=${tmdbId}`);
+
+    // Providers run in parallel. A slow/failed provider does not prevent
+    // another provider from returning its streams.
+    const groups = await Promise.all(
+      PROVIDERS.map((provider) => resolveProvider(provider, tmdbId, info))
+    );
+
+    const streams = dedupeStreams(groups.flat());
+
+    console.log(
+      `[STREAM] providers=${PROVIDERS.length} returned=${streams.length}`
+    );
+
     return { streams };
   } catch (error) {
     console.error(
