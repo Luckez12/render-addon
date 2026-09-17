@@ -1,26 +1,37 @@
 name: Build and Test Addon
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - "Auto Unzip Addon"
+    types:
+      - completed
     branches:
       - main
-    paths:
-      - "addon.js"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/build-test.yml"
-  pull_request:
-    branches:
-      - main
+
   workflow_dispatch:
 
 jobs:
   build-test:
+    # Only continue automatically if Auto Unzip Addon finished successfully.
+    # Manual workflow_dispatch runs are also allowed.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout latest main
         uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Verify extracted addon files
+        shell: bash
+        run: |
+          test -f addon.js || { echo "addon.js not found"; exit 1; }
+          test -f package.json || { echo "package.json not found"; exit 1; }
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
