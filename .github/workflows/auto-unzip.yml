@@ -20,6 +20,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verify ZIP exists
+        shell: bash
         run: |
           test -f render-addon.zip || {
             echo "render-addon.zip not found."
@@ -27,19 +28,26 @@ jobs:
           }
 
       - name: Extract addon files to repository root
+        shell: bash
         run: |
           unzip -o render-addon.zip -d .
 
-      - name: Commit extracted files
+      - name: Remove uploaded ZIP
+        shell: bash
+        run: |
+          rm -f render-addon.zip
+
+      - name: Commit extracted files and ZIP removal
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add addon.js package.json README.md .gitignore
+          git add -A
 
           if git diff --cached --quiet; then
-            echo "No extracted changes to commit."
+            echo "No changes to commit."
           else
-            git commit -m "chore: auto-extract addon package"
+            git commit -m "chore: extract addon package"
             git push
           fi
