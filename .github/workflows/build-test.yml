@@ -1,0 +1,60 @@
+name: Build and Test Addon
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "addon.js"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/build-test.yml"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Syntax check
+        run: npm run check
+
+      - name: Start addon and test manifest
+        shell: bash
+        run: |
+          set -e
+
+          npm start > addon.log 2>&1 &
+          ADDON_PID=$!
+
+          cleanup() {
+            kill "$ADDON_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for i in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:7000/manifest.json > manifest.json; then
+              echo "Manifest endpoint is responding."
+              cat manifest.json
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "Addon did not become ready."
+          cat addon.log || true
+          exit 1

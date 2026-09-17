@@ -1,1 +1,45 @@
+name: Auto Unzip Addon
 
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "render-addon.zip"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify ZIP exists
+        run: |
+          test -f render-addon.zip || {
+            echo "render-addon.zip not found."
+            exit 1
+          }
+
+      - name: Extract addon files to repository root
+        run: |
+          unzip -o render-addon.zip -d .
+
+      - name: Commit extracted files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add addon.js package.json README.md .gitignore
+
+          if git diff --cached --quiet; then
+            echo "No extracted changes to commit."
+          else
+            git commit -m "chore: auto-extract addon package"
+            git push
+          fi
