@@ -1,6 +1,27 @@
 # render-addon
 
-Stremio stream addon for Render.
+Multi-provider Stremio stream addon hosted on Render.
+
+## Providers
+
+- MovieBox
+- OneTouchTV
+
+Both providers are queried together and their usable streams are combined.
+
+## Quality policy
+
+Minimum known quality: 720p.
+
+- 2160p / 4K: allowed
+- 1440p: allowed
+- 1080p: allowed
+- 720p: allowed
+- 480p: blocked
+- 360p: blocked
+- OneTouchTV `Auto` / unknown quality: blocked
+
+MovieBox retains its existing min-720 filtering behavior.
 
 ## Structure
 
@@ -8,36 +29,11 @@ Stremio stream addon for Render.
 /
 ├── addon.js
 ├── providers/
-│   └── moviebox.js
+│   ├── moviebox.js
+│   └── onetouchtv.js
 ├── package.json
 ├── README.md
 └── .gitignore
-```
-
-## Local
-
-```bash
-npm install
-npm run check
-npm start
-```
-
-Manifest:
-
-```text
-http://127.0.0.1:7000/manifest.json
-```
-
-Movie request:
-
-```text
-/stream/movie/tt1234567.json
-```
-
-Series request:
-
-```text
-/stream/series/tt1234567:1:1.json
 ```
 
 ## Render
@@ -52,10 +48,4 @@ Start command:
 
 ```text
 npm start
-```
-
-Install URL:
-
-```text
-https://render-addon.onrender.com/manifest.json
 ```

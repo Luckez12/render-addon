@@ -1,11 +1,13 @@
 const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
-const { getStreamsByImdb } = require("./providers/moviebox");
+
+const moviebox = require("./providers/moviebox");
+const onetouchtv = require("./providers/onetouchtv");
 
 const manifest = {
   id: "com.luckez12.renderaddon",
-  version: "1.1.1",
+  version: "1.2.0",
   name: "Luckez Stremio Addon",
-  description: "Custom Stremio stream addon hosted on Render",
+  description: "Custom multi-provider Stremio stream addon hosted on Render",
   resources: ["stream"],
   types: ["movie", "series"],
   catalogs: [],
@@ -13,6 +15,21 @@ const manifest = {
 };
 
 const builder = new addonBuilder(manifest);
+
+const PROVIDERS = [
+  {
+    id: "moviebox",
+    name: "MovieBox",
+    strictKnownQuality: false,
+    getStreams: moviebox.getStreams
+  },
+  {
+    id: "onetouchtv",
+    name: "OneTouchTV",
+    strictKnownQuality: true,
+    getStreams: onetouchtv.getStreams
+  }
+];
 
 function parseStremioId(type, id) {
   const parts = String(id || "").split(":");
@@ -47,19 +64,54 @@ function parseStremioId(type, id) {
   return null;
 }
 
-function normalizeStream(stream, requestInfo) {
-  if (!stream || !stream.url) return null;
+function qualityNumber(value) {
+  const text = String(value || "").toLowerCase();
+
+  if (text.includes("4k")) return 2160;
+
+  const match = text.match(/(?:^|[^0-9])(2160|1440|1080|720|480|360)\s*p?(?:[^0-9]|$)/i);
+  return match ? Number(match[1]) : 0;
+}
+
+function passesMinimumQuality(stream, provider) {
+  if (!stream || !stream.url) return false;
+
+  const quality = qualityNumber(
+    stream.quality || stream.title || stream.name || stream.url
+  );
+
+  if (quality) return quality >= 720;
+
+  // OneTouchTV reports "Auto" when it cannot identify a resolution.
+  // For the strict minimum-720 rule, do not include unknown-quality OneTouchTV streams.
+  if (provider.strictKnownQuality) return false;
+
+  // MovieBox already has its own min-720 filter. Keep unknown/adaptive results
+  // unless they explicitly advertise 360p/480p.
+  const text = String(
+    (stream.quality || "") + " " +
+    (stream.title || "") + " " +
+    (stream.name || "") + " " +
+    (stream.url || "")
+  ).toLowerCase();
+
+  return !/(?:^|[^0-9])(360|480)\s*p?(?:[^0-9]|$)/.test(text);
+}
+
+function normalizeStream(stream, requestInfo, provider) {
+  if (!passesMinimumQuality(stream, provider)) return null;
 
   const out = {
-    name: stream.name || "MovieBox",
-    title: stream.title || stream.quality || "MovieBox",
+    name: stream.name || provider.name,
+    title: stream.title || stream.quality || provider.name,
     url: String(stream.url)
   };
 
   const behaviorHints = Object.assign({}, stream.behaviorHints || {});
-  const headers = stream.headers && typeof stream.headers === "object"
-    ? stream.headers
-    : null;
+  const headers =
+    stream.headers && typeof stream.headers === "object"
+      ? stream.headers
+      : null;
 
   if (headers && Object.keys(headers).length) {
     behaviorHints.notWebReady = true;
@@ -69,7 +121,9 @@ function normalizeStream(stream, requestInfo) {
       {
         request: Object.assign(
           {},
-          (behaviorHints.proxyHeaders && behaviorHints.proxyHeaders.request) || {},
+          (behaviorHints.proxyHeaders &&
+            behaviorHints.proxyHeaders.request) ||
+            {},
           headers
         )
       }
@@ -86,7 +140,7 @@ function normalizeStream(stream, requestInfo) {
 
   if (requestInfo && requestInfo.mediaType === "tv") {
     behaviorHints.bingeGroup =
-      "luckez-moviebox-" + (quality || "auto");
+      "luckez-" + provider.id + "-" + (quality || "auto");
   }
 
   if (Object.keys(behaviorHints).length) {
@@ -94,6 +148,49 @@ function normalizeStream(stream, requestInfo) {
   }
 
   return out;
+}
+
+function dedupeStreams(streams) {
+  const seen = new Set();
+
+  return (streams || []).filter((stream) => {
+    if (!stream || !stream.url) return false;
+
+    const key = String(stream.url);
+    if (seen.has(key)) return false;
+
+    seen.add(key);
+    return true;
+  });
+}
+
+async function resolveProvider(provider, tmdbId, info) {
+  const started = Date.now();
+
+  try {
+    const raw = await provider.getStreams(
+      tmdbId,
+      info.mediaType,
+      info.season,
+      info.episode
+    );
+
+    const streams = (raw || [])
+      .map((stream) => normalizeStream(stream, info, provider))
+      .filter(Boolean);
+
+    console.log(
+      `[${provider.name}] addon streams=${streams.length} elapsed=${Date.now() - started}ms`
+    );
+
+    return streams;
+  } catch (error) {
+    console.error(
+      `[${provider.name}] provider error:`,
+      error && error.message ? error.message : error
+    );
+    return [];
+  }
 }
 
 builder.defineStreamHandler(async ({ type, id }) => {
@@ -106,22 +203,40 @@ builder.defineStreamHandler(async ({ type, id }) => {
 
   console.log(
     `[STREAM] type=${type} id=${id} imdb=${info.imdbId}` +
-    (info.mediaType === "tv" ? ` S${info.season}E${info.episode}` : "")
+      (info.mediaType === "tv"
+        ? ` S${info.season}E${info.episode}`
+        : "")
   );
 
   try {
-    const rawStreams = await getStreamsByImdb(
+    const tmdbId = await moviebox.getTmdbIdFromImdb(
       info.imdbId,
-      info.mediaType,
-      info.season,
-      info.episode
+      info.mediaType
     );
 
-    const streams = (rawStreams || [])
-      .map((stream) => normalizeStream(stream, info))
-      .filter(Boolean);
+    if (!tmdbId) {
+      console.log(
+        `[STREAM] IMDb -> TMDB mapping not found for ${info.imdbId}`
+      );
+      return { streams: [] };
+    }
 
-    console.log(`[STREAM] returned=${streams.length}`);
+    console.log(`[STREAM] IMDb=${info.imdbId} -> TMDB=${tmdbId}`);
+
+    // Run MovieBox and OneTouchTV together, then combine their usable streams.
+    // A provider error is isolated inside resolveProvider and becomes [].
+    const groups = await Promise.all(
+      PROVIDERS.map((provider) =>
+        resolveProvider(provider, tmdbId, info)
+      )
+    );
+
+    const streams = dedupeStreams(groups.flat());
+
+    console.log(
+      `[STREAM] providers=${PROVIDERS.length} returned=${streams.length}`
+    );
+
     return { streams };
   } catch (error) {
     console.error(
