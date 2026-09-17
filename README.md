@@ -19,7 +19,8 @@ Minimum known quality: 720p.
 - 720p: allowed
 - 480p: blocked
 - 360p: blocked
-- OneTouchTV `Auto` / unknown quality: blocked
+- OneTouchTV `Auto` / unknown quality: allowed
+- OneTouchTV explicit 360p / 480p: blocked
 
 MovieBox retains its existing min-720 filtering behavior.
 

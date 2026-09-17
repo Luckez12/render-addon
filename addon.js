@@ -5,7 +5,7 @@ const onetouchtv = require("./providers/onetouchtv");
 
 const manifest = {
   id: "com.luckez12.renderaddon",
-  version: "1.2.0",
+  version: "1.2.1",
   name: "Luckez Stremio Addon",
   description: "Custom multi-provider Stremio stream addon hosted on Render",
   resources: ["stream"],
@@ -26,7 +26,7 @@ const PROVIDERS = [
   {
     id: "onetouchtv",
     name: "OneTouchTV",
-    strictKnownQuality: true,
+    strictKnownQuality: false,
     getStreams: onetouchtv.getStreams
   }
 ];
@@ -82,12 +82,11 @@ function passesMinimumQuality(stream, provider) {
 
   if (quality) return quality >= 720;
 
-  // OneTouchTV reports "Auto" when it cannot identify a resolution.
-  // For the strict minimum-720 rule, do not include unknown-quality OneTouchTV streams.
+  // Unknown/adaptive quality is allowed unless it explicitly advertises 360p/480p.
+  // This is needed for providers such as OneTouchTV where HLS URLs can be "Auto".
   if (provider.strictKnownQuality) return false;
 
-  // MovieBox already has its own min-720 filter. Keep unknown/adaptive results
-  // unless they explicitly advertise 360p/480p.
+  // Keep unknown/adaptive results unless they explicitly advertise 360p/480p.
   const text = String(
     (stream.quality || "") + " " +
     (stream.title || "") + " " +
