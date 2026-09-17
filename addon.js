@@ -3,7 +3,7 @@ const { getStreamsByImdb } = require("./providers/moviebox");
 
 const manifest = {
   id: "com.luckez12.renderaddon",
-  version: "1.1.0",
+  version: "1.2.0",
   name: "Luckez Stremio Addon",
   description: "Custom Stremio stream addon hosted on Render",
   resources: ["stream"],
