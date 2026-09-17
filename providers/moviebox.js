@@ -937,29 +937,14 @@ function resolveFastQuality(subjectId, mediaType, season, episode, resolution) {
   });
 }
 
-function mediaIdentity(item) {
-  var size = candidateSize(item);
-  var duration = candidateDuration(item);
-  var host = hostOf(String(item && item.resourceLink || ""));
-  var rid = String(item && item.resourceId || "").trim();
-
-  return [
-    size,
-    duration,
-    host,
-    (!size && !duration) ? rid : ""
-  ].join("|");
-}
-
 function multiQualityFastDirect(subjectId, mediaType, season, episode) {
   fastVerifyCache = {};
 
-  // Return every verified distinct quality at 720p or above.
+  // MovieBox currently returns the same resource set for 2160/1080/720.
+  // Fetch once, then trust each item's actual resolution.
   return fetchResolution(subjectId, mediaType, season, episode, 2160).then(function (items) {
     var candidates = uniqueCandidates(items).filter(function (item) {
-      var q = Number(item && (item.resolution || item._requestedResolution) || 0);
-      return q >= 720 &&
-        /^https?:\/\//i.test(String(item && item.resourceLink || ""));
+      return /^https?:\/\//i.test(String(item && item.resourceLink || ""));
     }).sort(function (a, b) {
       var qa = Number(a && (a.resolution || a._requestedResolution) || 0);
       var qb = Number(b && (b.resolution || b._requestedResolution) || 0);
@@ -967,109 +952,58 @@ function multiQualityFastDirect(subjectId, mediaType, season, episode) {
       return directCandidateScore(b) - directCandidateScore(a);
     });
 
-    var byQuality = {};
+    var seen = {};
+    var unique = [];
     candidates.forEach(function (item) {
-      var q = Number(item && (item.resolution || item._requestedResolution) || 0);
-      if (q < 720) return;
-      if (!byQuality[q]) byQuality[q] = [];
-      if (byQuality[q].length < 2) byQuality[q].push(item);
+      var fp = candidateFingerprint(item);
+      if (seen[fp]) return;
+      seen[fp] = true;
+      unique.push(item);
     });
 
-    var qualities = Object.keys(byQuality)
-      .map(function (q) { return Number(q); })
-      .filter(function (q) { return q >= 720; })
-      .sort(function (a, b) { return b - a; });
+    var actual = [];
+    unique.forEach(function (item) {
+      var q = qualityName(Number(item.resolution || item._requestedResolution || 0));
+      if (actual.indexOf(q) < 0) actual.push(q);
+    });
 
-    console.log("[MovieBox] >=720p qualities=" +
-      (qualities.length ? qualities.map(qualityName).join(",") : "none"));
+    console.log("[MovieBox] single resource request items=" + items.length +
+      " unique=" + unique.length +
+      " actual=" + (actual.length ? actual.join(",") : "none"));
 
-    function verifyQuality(q) {
-      var list = byQuality[q] || [];
-
-      function tryOne(i) {
-        if (i >= list.length) return Promise.resolve(null);
-        return verifyCachedCandidate(list[i], mediaType, i + 1).then(function (stream) {
-          if (stream) return stream;
-          return tryOne(i + 1);
-        });
-      }
-
-      return tryOne(0);
+    function tryCandidate(i) {
+      if (i >= unique.length) return Promise.resolve([]);
+      return verifyCachedCandidate(unique[i], mediaType, 1).then(function (stream) {
+        if (stream) {
+          console.log("[MovieBox] READY q=" + stream.quality +
+            " host=" + hostOf(stream.url));
+          return [stream];
+        }
+        return tryCandidate(i + 1);
+      });
     }
 
-    return Promise.all(qualities.map(verifyQuality)).then(function (streams) {
-      streams = streams.filter(Boolean);
-
-      var seenMedia = {};
-      var out = [];
-
-      streams.forEach(function (stream) {
-        var sourceItem = null;
-
-        for (var qIndex = 0; qIndex < qualities.length && !sourceItem; qIndex++) {
-          var q = qualities[qIndex];
-          var list = byQuality[q] || [];
-          for (var i = 0; i < list.length; i++) {
-            if (String(list[i].resourceLink || "") === String(stream.url || "")) {
-              sourceItem = list[i];
-              break;
-            }
-          }
-        }
-
-        var key = sourceItem ? mediaIdentity(sourceItem) : String(stream.url || "");
-        if (seenMedia[key]) return;
-        seenMedia[key] = true;
-        out.push(stream);
-      });
-
-      out.sort(function (a, b) {
-        var aq = parseInt(String(a.quality || "").replace(/\D+/g, ""), 10) || 0;
-        var bq = parseInt(String(b.quality || "").replace(/\D+/g, ""), 10) || 0;
-        return bq - aq;
-      });
-
-      console.log("[MovieBox] >=720p verified=" +
-        (out.length ? out.map(function (s) { return s.quality; }).join(",") : "none"));
-
-      return out;
-    });
+    return tryCandidate(0);
   }).catch(function (error) {
-    console.log("[MovieBox] multi-quality >=720p error=" +
+    console.log("[MovieBox] single resource error=" +
       (error && error.message ? error.message : String(error)));
     return [];
   }).then(function (streams) {
     streams = streams || [];
-    if (streams.length) return streams;
-
-    // Fallback only to allowed qualities; never request below 720p.
-    function fallback(list, i, out) {
-      out = out || [];
-      if (i >= list.length) return Promise.resolve(out);
-
-      return resolveFastQuality(subjectId, mediaType, season, episode, list[i])
-        .then(function (stream) {
-          if (stream) out.push(stream);
-          return fallback(list, i + 1, out);
-        });
+    if (streams.length) {
+      console.log("[MovieBox] fast ready=" + streams.map(function (s) {
+        return s.quality + ":" + hostOf(s.url);
+      }).join(","));
+      return streams;
     }
 
-    return fallback([2160, 1080, 720], 0, []).then(function (out) {
-      var seen = {};
-      return out.filter(function (stream) {
-        var q = parseInt(String(stream && stream.quality || "").replace(/\D+/g, ""), 10) || 0;
-        if (q < 720) return false;
-
-        var key = String(stream.url || "");
-        if (!key || seen[key]) return false;
-        seen[key] = true;
-        return true;
-      }).sort(function (a, b) {
-        var aq = parseInt(String(a.quality || "").replace(/\D+/g, ""), 10) || 0;
-        var bq = parseInt(String(b.quality || "").replace(/\D+/g, ""), 10) || 0;
-        return bq - aq;
+    function fallback(list, i) {
+      if (i >= list.length) return Promise.resolve([]);
+      return resolveFastQuality(subjectId, mediaType, season, episode, list[i]).then(function (stream) {
+        return stream ? [stream] : fallback(list, i + 1);
       });
-    });
+    }
+    return fallback([1080, 720], 0);
   });
 }
 

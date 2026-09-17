@@ -69,3 +69,10 @@ Install URL:
 ```text
 https://render-addon.onrender.com/manifest.json
 ```
+
+
+## Current provider policy
+
+- MovieBox: fast single verified stream; fallback is 1080p then 720p only.
+- KissKH movies: strict exact-title + year matching to reduce wrong-film results.
+- Known fixed qualities below 720p are filtered out by the addon.

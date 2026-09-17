@@ -390,7 +390,54 @@ function verifyCandidateDetail(base, candidate, info, mediaType) {
         score += 15;
       }
 
-      if (
+      if (mediaType === "movie") {
+        var detailTitle = normalizeTitle(cleanCandidateTitle(detail && detail.title));
+        var exactMovieTitle = aliases.some(function(alias) {
+          return detailTitle === normalizeTitle(alias);
+        });
+
+        // Movies must be an exact TMDB alias match. Partial/fuzzy title matches
+        // are deliberately rejected because they can resolve to the wrong film.
+        if (!exactMovieTitle) {
+          console.log("[KissKH] reject movie reason=title-not-exact title='" +
+            String(detail && detail.title || "") + "'");
+          return null;
+        }
+
+        // If TMDB knows the year, require KissKH to expose a matching year too.
+        // Missing/ambiguous year is rejected for movies rather than risking a
+        // same-title remake or an unrelated film.
+        if (info.year) {
+          if (!detailYear) {
+            console.log("[KissKH] reject movie reason=year-missing title='" +
+              String(detail && detail.title || "") + "'");
+            return null;
+          }
+
+          if (Math.abs(Number(info.year) - Number(detailYear)) > 1) {
+            console.log("[KissKH] reject movie reason=year-mismatch expected=" +
+              info.year + " actual=" + detailYear);
+            return null;
+          }
+        }
+
+        // A movie entry should not expose a season-like multi-episode pack.
+        if (
+          detail &&
+          Array.isArray(detail.episodes) &&
+          detail.episodes.length > 1
+        ) {
+          console.log("[KissKH] reject movie reason=multiple-episodes count=" +
+            detail.episodes.length);
+          return null;
+        }
+
+        if (score < 100) {
+          console.log("[KissKH] reject movie reason=low-score score=" +
+            Math.round(score));
+          return null;
+        }
+      } else if (
         score < 75 ||
         (
           info.year &&
