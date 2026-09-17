@@ -58,6 +58,45 @@ function fetchJsonSimple(url, options) {
   });
 }
 
+
+function qualityNumber(value) {
+  var text = String(value || "").toLowerCase();
+  if (text.indexOf("4k") !== -1) return 2160;
+  var match = text.match(/(\d{3,4})\s*p?/);
+  return match ? Number(match[1]) : 0;
+}
+
+function isAtLeast720Quality(stream) {
+  if (!stream || !stream.url) return false;
+
+  var quality = qualityNumber(
+    stream.quality ||
+    stream.title ||
+    stream.name ||
+    stream.url
+  );
+
+  // Unknown quality is allowed only when the URL/title does not explicitly
+  // advertise a sub-720 resolution. This avoids throwing away adaptive sources.
+  if (!quality) {
+    var text = String(
+      (stream.quality || "") + " " +
+      (stream.title || "") + " " +
+      (stream.name || "") + " " +
+      (stream.url || "")
+    ).toLowerCase();
+
+    if (/(?:^|[^0-9])(360|480)\s*p?(?:[^0-9]|$)/.test(text)) return false;
+    return true;
+  }
+
+  return quality >= 720;
+}
+
+function filterMinimumQuality(streams) {
+  return (Array.isArray(streams) ? streams : []).filter(isAtLeast720Quality);
+}
+
 function normalizeTitle(value) {
   var text = String(value || "").toLowerCase();
   try { text = text.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (_) {}
@@ -1003,11 +1042,11 @@ function multiQualityFastDirect(subjectId, mediaType, season, episode) {
         return stream ? [stream] : fallback(list, i + 1);
       });
     }
-    return fallback([1080, 720, 480], 0);
+    return fallback([1080, 720], 0);
   });
 }
 
-function getStreams(tmdbId, mediaType, season, episode) {
+function getStreamsUnfiltered(tmdbId, mediaType, season, episode) {
   var startedAt = Date.now();
   mediaType = mediaType === "tv" ? "tv" : "movie";
   season = Number(season || 1);
@@ -1064,6 +1103,21 @@ function getStreamsByImdb(imdbId, mediaType, season, episode) {
         (error && error.message ? error.message : String(error)));
       return [];
     });
+}
+
+
+function getStreams(tmdbId, mediaType, season, episode) {
+  return Promise.resolve(
+    getStreamsUnfiltered(tmdbId, mediaType, season, episode)
+  ).then(function(streams) {
+    var filtered = filterMinimumQuality(streams);
+    console.log(
+      "[MovieBox] min-quality=720 input=" +
+      (Array.isArray(streams) ? streams.length : 0) +
+      " output=" + filtered.length
+    );
+    return filtered;
+  });
 }
 
 module.exports = {
