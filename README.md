@@ -1,11 +1,18 @@
 # render-addon
 
-Simple Stremio addon intended to run on Render.
+Stremio stream addon for Render.
 
-## Local run
+## Files
+
+- `addon.js` — Stremio addon server and IMDb/series request handling
+- `moviebox.js` — provider module
+- `package.json` — Node dependencies and scripts
+
+## Local
 
 ```bash
 npm install
+npm run check
 npm start
 ```
 
@@ -15,24 +22,34 @@ Manifest:
 http://127.0.0.1:7000/manifest.json
 ```
 
-## Render
-
-Use:
-
-- Runtime: Node
-- Build Command: `npm install`
-- Start Command: `npm start`
-
-After deployment, install the addon in Stremio using:
+Movie stream request format:
 
 ```text
-https://YOUR-SERVICE.onrender.com/manifest.json
+/stream/movie/tt1234567.json
 ```
 
-## Test item
-
-The sample stream handler returns Big Buck Bunny for IMDb ID:
+Series stream request format:
 
 ```text
-tt1254207
+/stream/series/tt1234567:1:1.json
+```
+
+## Render
+
+Build command:
+
+```text
+npm install
+```
+
+Start command:
+
+```text
+npm start
+```
+
+Install URL:
+
+```text
+https://render-addon.onrender.com/manifest.json
 ```
