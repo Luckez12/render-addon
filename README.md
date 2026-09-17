@@ -1,6 +1,6 @@
 # render-addon
 
-Multi-provider Stremio stream addon hosted on Render.
+Stremio stream addon for Render.
 
 ## Structure
 
@@ -8,21 +8,11 @@ Multi-provider Stremio stream addon hosted on Render.
 /
 ├── addon.js
 ├── providers/
-│   ├── moviebox.js
-│   └── kisskh.js
+│   └── moviebox.js
 ├── package.json
 ├── README.md
 └── .gitignore
 ```
-
-## Providers
-
-- MovieBox
-- KissKH
-
-Providers are queried in parallel. If one provider fails, the other provider can still return streams.
-
-Known fixed qualities below 720p are filtered out globally. Adaptive/unknown (`Auto`) streams are retained for now and can be tuned after all providers are added.
 
 ## Local
 
@@ -69,10 +59,3 @@ Install URL:
 ```text
 https://render-addon.onrender.com/manifest.json
 ```
-
-
-## Current provider policy
-
-- MovieBox: fast single verified stream; fallback is 1080p then 720p only.
-- KissKH movies: strict exact-title + year matching to reduce wrong-film results.
-- Known fixed qualities below 720p are filtered out by the addon.

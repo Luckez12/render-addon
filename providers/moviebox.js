@@ -1003,7 +1003,7 @@ function multiQualityFastDirect(subjectId, mediaType, season, episode) {
         return stream ? [stream] : fallback(list, i + 1);
       });
     }
-    return fallback([1080, 720], 0);
+    return fallback([1080, 720, 480], 0);
   });
 }
 
