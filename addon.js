@@ -1,5 +1,5 @@
 const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
-const { getStreamsByImdb } = require("./moviebox");
+const { getStreamsByImdb } = require("./providers/moviebox");
 
 const manifest = {
   id: "com.luckez12.renderaddon",

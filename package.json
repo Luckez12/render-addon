@@ -6,7 +6,7 @@
   "main": "addon.js",
   "scripts": {
     "start": "node addon.js",
-    "check": "node --check addon.js && node --check moviebox.js"
+    "check": "node --check addon.js && node --check providers/moviebox.js"
   },
   "engines": {
     "node": ">=20"

@@ -2,11 +2,17 @@
 
 Stremio stream addon for Render.
 
-## Files
+## Structure
 
-- `addon.js` — Stremio addon server and IMDb/series request handling
-- `moviebox.js` — provider module
-- `package.json` — Node dependencies and scripts
+```text
+/
+├── addon.js
+├── providers/
+│   └── moviebox.js
+├── package.json
+├── README.md
+└── .gitignore
+```
 
 ## Local
 
@@ -22,13 +28,13 @@ Manifest:
 http://127.0.0.1:7000/manifest.json
 ```
 
-Movie stream request format:
+Movie request:
 
 ```text
 /stream/movie/tt1234567.json
 ```
 
-Series stream request format:
+Series request:
 
 ```text
 /stream/series/tt1234567:1:1.json
