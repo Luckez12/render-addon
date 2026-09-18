@@ -1,5 +1,13 @@
 # render-addon
 
+## Install Addon
+
+Manifest URL:
+
+https://render-addon.onrender.com/manifest.json
+
+[Open manifest.json](https://render-addon.onrender.com/manifest.json)
+
 Multi-provider Stremio stream addon hosted on Render.
 
 ## Providers
