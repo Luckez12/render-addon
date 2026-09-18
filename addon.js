@@ -8,7 +8,7 @@ const kisskh = require("./providers/kisskh");
 const manifest = {
   id: "com.luckez12.renderaddon",
   version: "1.4.0",
-  name: "Luckez Stremio Addon",
+  name: "Render Addon",
   description: "Custom multi-provider Stremio stream addon hosted on Render",
   resources: ["stream"],
   types: ["movie", "series"],
